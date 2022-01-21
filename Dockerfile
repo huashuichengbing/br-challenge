@@ -18,9 +18,12 @@ RUN apt install -y \
     ros-$ROS_DISTRO-gmapping ros-$ROS_DISTRO-navigation ros-$ROS_DISTRO-interactive-markers
 
 RUN apt install -y \
-    ros-$ROS_DISTRO-turtlebot3-msgs ros-$ROS_DISTRO-turtlebot3
+    ros-$ROS_DISTRO-turtlebot3-msgs ros-$ROS_DISTRO-turtlebot3 ros-$ROS_DISTRO-turtlebot3-autorace
 
-RUN echo "source /opt/ros/melodic/setup.bash" >> /root/.bashrc
+RUN apt install -y \
+    ros-$ROS_DISTRO-laser-geometry
+
+RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /root/.bashrc
 RUN echo 'PS1="[\[\e[1;36m\]\w\[\e[0m\]]\[\e[1;31m\]>\[\e[0m\] "' >> /root/.bashrc
 RUN echo "export TURTLEBOT3_MODEL=burger" >> /root/.bashrc
 WORKDIR /root/catkin_ws
