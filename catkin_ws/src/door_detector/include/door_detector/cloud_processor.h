@@ -32,6 +32,7 @@ typedef struct FittedLineInfo
 
 class CloudProcessor {
 #ifdef VISUALIZE
+    int text_id_;
     pcl::visualization::PCLVisualizer::Ptr viewer_;
 #endif
 
@@ -39,6 +40,9 @@ class CloudProcessor {
                         long int maxIterations,
                         float distanceThreshold,
                         float cutoffPercentage, bool dense);
+
+    LineMinMaxPoints getLineXYMinMaxPoints(pcl::PointCloud<Point>::Ptr line, 
+                        pcl::ModelCoefficients::Ptr coefficients);
 
 public:
     CloudProcessor();
