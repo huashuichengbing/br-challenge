@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   nav_msgs
   laser_geometry
+  pcl_conversions
+  pcl_ros
 )
 
 ## System dependencies are found with CMake's conventions
@@ -105,10 +107,13 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+ INCLUDE_DIRS include
 #  LIBRARIES door_detector
 #  CATKIN_DEPENDS roscpp std_msgs
 #  DEPENDS system_lib
+ CATKIN_DEPENDS roscpp
+                pcl_conversions
+                pcl_ros
 )
 
 ###########
@@ -118,7 +123,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -137,8 +142,20 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/door_detector_node.cpp)
 
-add_executable(talker src/main.cc)
-target_link_libraries(talker ${catkin_LIBRARIES})
+add_library(cloud_processor
+        src/cloud_processor.cc
+        include/door_detector/cloud_processor.h
+        )
+target_link_libraries(cloud_processor
+        pcl_visualization
+        ${catkin_LIBRARIES}
+        )
+
+add_executable(door_detector src/main.cc)
+target_link_libraries(door_detector 
+        cloud_processor
+        ${catkin_LIBRARIES}
+        )
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
