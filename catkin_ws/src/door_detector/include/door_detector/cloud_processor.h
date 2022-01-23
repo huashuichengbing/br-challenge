@@ -14,35 +14,38 @@ namespace cloud_processor {
 
 typedef pcl::PointXYZ Point;
 
-typedef struct LineMinMaxPoints
+typedef struct LineSegment
 {
-    // LineMinMaxPoints(Point& minPt, Point& maxPt) : minPt(minPt), maxPt(maxPt) {};
-    Point minPt, maxPt;
-};
+    Point startPt, endPt;
+} LineSegment;
 
 
 typedef struct FittedLineInfo
 {
     FittedLineInfo() : numberOfLines(0) {};
     std::vector<pcl::PointCloud<Point>::Ptr> lines;
-    std::vector<LineMinMaxPoints> lines_min_max_points;
+    std::vector<LineSegment> lines_min_max_points;
     std::vector<pcl::ModelCoefficients::Ptr> lines_coefficients;
     int numberOfLines;
 } FittedLineInfo;
 
 class CloudProcessor {
 #ifdef VISUALIZE
-    int text_id_;
+    // int text_id_;
     pcl::visualization::PCLVisualizer::Ptr viewer_;
 #endif
+
+    float min_door_width_;
 
     FittedLineInfo *  RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputCloud, 
                         long int maxIterations,
                         float distanceThreshold,
                         float cutoffPercentage, bool dense);
 
-    LineMinMaxPoints getLineXYMinMaxPoints(pcl::PointCloud<Point>::Ptr line, 
-                        pcl::ModelCoefficients::Ptr coefficients);
+    LineSegment getLineXYMinMaxPoints(pcl::PointCloud<Point>::ConstPtr line, 
+                        pcl::ModelCoefficients::ConstPtr coefficients);
+
+    bool detectCornerDoor(const LineSegment& line1, const LineSegment& line2, LineSegment& door);
 
 public:
     CloudProcessor();
