@@ -1,5 +1,5 @@
 ip_scan_topic: "scan/"
-op_path_topic: "path/"
+op_path_topic: "paths/"
 
 # Ignore doors smaller than this width
 min_door_width: 0.5

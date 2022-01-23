@@ -15,6 +15,7 @@
 #include <pcl/conversions.h>
 #include <pcl_ros/transforms.h>
 #include <nav_msgs/Path.h>
+#include <geometry_msgs/PoseStamped.h>
 
 #include <sstream>
 #include <string>
@@ -33,7 +34,7 @@ ROSConnector::ROSConnector() :
     cloud_processor_ = new CloudProcessor(min_door_width_, cluster_min_size_, cluster_max_size_, cluster_tolerance_, 
                                           line_min_points_, line_exact_min_points_);
     scan_sub_ = nh_.subscribe<sensor_msgs::LaserScan> (scan_topic_, 1, &ROSConnector::scanCallback, this);
-    path_publisher_ = nh_.advertise<nav_msgs::Path> (path_topic_, 100, false);
+    path_publisher_ = nh_.advertise<door_detector::Paths> (path_topic_, 100, false);
 }
 
 
@@ -50,17 +51,41 @@ void ROSConnector::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan) {
 
 door_detector::Paths ROSConnector::doors2path(const std::vector<LineSegment>& doors) {
     door_detector::Paths paths;
+    static int seq = 0;
+    auto this_header = last_header_;
+    this_header.seq = seq;
+    this_header.stamp = ros::Time::now();
     
     for (const auto& door: doors){
         nav_msgs::Path path;
+        path.header = this_header;
+
         auto points = getPerpendicularPoints(door, entry_path_offset_);
         std::sort(points.begin(), points.end(), [&points](const Point& p1, const Point& p2){
             return lineLengthXY(LineSegment(p1, Point(0, 0, 0))) < lineLengthXY(LineSegment(p2, Point(0, 0, 0)));
         });
-        path.header = last_header_;
 
+        geometry_msgs::Quaternion orientation;
+        orientation.x = points[1].x-points[0].x;
+        orientation.y = points[1].y-points[0].y;
+        orientation.z = points[1].z;
+        orientation.w = 1;
+        int sub_seq = 0;
+        for (const auto& pt: points){
+            geometry_msgs::PoseStamped pose;
+            pose.header = this_header;
+            pose.header.seq = sub_seq++;
+
+            pose.pose.orientation = orientation;
+            pose.pose.position.x = pt.x;
+            pose.pose.position.y = pt.y;
+            pose.pose.position.z = pt.z;
+
+            path.poses.push_back(pose);
+        }
         paths.paths.push_back(path);
     }
+    seq++;
     return paths;
 }
 
@@ -69,8 +94,8 @@ void ROSConnector::spin(int rate) {
     ros::Rate loop_rate(rate);
     while (nh_.ok()) {
         std::vector<LineSegment> doors = cloud_processor_->detect(pcl_cloud_);
-        // door_detector::Paths paths = doors2path(doors);
-        // path_publisher_.publish(paths);
+        door_detector::Paths paths = doors2path(doors);
+        path_publisher_.publish(paths);
 
         ros::spinOnce();
         loop_rate.sleep();
