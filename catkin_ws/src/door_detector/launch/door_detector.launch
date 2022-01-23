@@ -1,0 +1,5 @@
+<launch>
+    <node name="door_detector" pkg="door_detector" type="door_detector" output="screen">
+        <rosparam command="load" file="$(find door_detector)/launch/params.yaml" />
+    </node>
+</launch>

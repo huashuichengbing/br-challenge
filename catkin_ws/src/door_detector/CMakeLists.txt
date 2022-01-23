@@ -154,9 +154,19 @@ target_link_libraries(cloud_processor
         ${catkin_LIBRARIES}
         )
 
+add_library(dd_ros_connector
+        src/ros_connector.cc
+        include/door_detector/ros_connector.h
+        )
+target_link_libraries(dd_ros_connector
+        cloud_processor
+        ${catkin_LIBRARIES}
+        )
+
 add_executable(door_detector src/main.cc)
 target_link_libraries(door_detector 
         cloud_processor
+        dd_ros_connector
         ${catkin_LIBRARIES}
         )
 

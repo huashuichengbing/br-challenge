@@ -1,5 +1,5 @@
-#ifndef CLOUD_PROCESSOR_CLOUD_PROCESSOR_H
-#define CLOUD_PROCESSOR_CLOUD_PROCESSOR_H
+#ifndef DOOR_DETECTOR_CLOUD_PROCESSOR_H
+#define DOOR_DETECTOR_CLOUD_PROCESSOR_H
 
 #include <pcl/common/transforms.h>
 #include <pcl/point_types.h>
@@ -10,7 +10,17 @@
 #include <pcl/visualization/cloud_viewer.h>
 #endif
 
-namespace cloud_processor {
+#define DEBUG
+
+#ifdef DEBUG
+#define DEBUG_PRINT(x)      std::cout << x
+#define DEBUG_PRINTLN(x)    DEBUG_PRINT(x) << std::endl
+#else
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
+#endif
+
+namespace door_detector {
 
 typedef pcl::PointXYZ Point;
 
@@ -48,15 +58,15 @@ class CloudProcessor {
     bool detectCornerDoor(const LineSegment& line1, const LineSegment& line2, LineSegment& door);
 
 public:
-    CloudProcessor();
+    CloudProcessor(float min_door_width);
 
-    void run(const pcl::PointCloud<Point>::ConstPtr& cloud);
+    void detect(const pcl::PointCloud<Point>::ConstPtr& cloud);
 
     void spinOnce();
 
     ~CloudProcessor();
 };
 
-}
+}  // namespace door_detector
 
-#endif //CLOUD_PROCESSOR_CLOUD_PROCESSOR_H
+#endif //DOOR_DETECTOR_CLOUD_PROCESSOR_H

@@ -10,21 +10,10 @@
 
 #define LINE_MIN_PTS 30
 #define LINE_MIN_FIT_PTS (LINE_MIN_PTS/2)
-#define DEBUG
 
-#ifdef DEBUG
-#define DEBUG_PRINT(x)      std::cout << x
-#define DEBUG_PRINTLN(x)    DEBUG_PRINT(x) << std::endl
-#else
-#define DEBUG_PRINT(x)
-#define DEBUG_PRINTLN(x)
-#endif
+namespace door_detector {
 
-namespace cloud_processor {
-
-using std::string;
-
-CloudProcessor::CloudProcessor() : min_door_width_(0.5),
+CloudProcessor::CloudProcessor(float min_door_width) : min_door_width_(min_door_width),
 #ifdef VISUALIZE
 viewer_(new pcl::visualization::PCLVisualizer("PCL Viewer"))
 #endif
@@ -162,9 +151,6 @@ bool CloudProcessor::detectCornerDoor(const LineSegment& line1, const LineSegmen
     float t, u;
     auto intersection_pt = lineSegmentIntersection(line1, line2, t, u);
 
-    // DEBUG_PRINTLN("intersection " << line1.startPt << line1.endPt << "|" <<line2.startPt << line2.endPt << "|" << intersection_pt);
-    // DEBUG_PRINTLN("t " << t << " u " << u);
-
     if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
         // Segments intersect. If lines intersect, there is no door
         return false;
@@ -291,7 +277,7 @@ CloudProcessor::RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputClo
     return retLines;
 }
 
-void CloudProcessor::run(const pcl::PointCloud<Point>::ConstPtr& cloud) {
+void CloudProcessor::detect(const pcl::PointCloud<Point>::ConstPtr& cloud) {
     static float text_id_ = 0;
     #ifdef  VISUALIZE
 
@@ -317,8 +303,6 @@ void CloudProcessor::run(const pcl::PointCloud<Point>::ConstPtr& cloud) {
         // pcl::visualization::PointCloudColorHandlerCustom<Point> color(lines->lines[i], r, g, b);
         // viewer_->addPointCloud<Point>(lines->lines[i], color, "C"+std::to_string(i));
         #endif
-        // DEBUG_PRINTLN("#lines: " << lines->numberOfLines);
-        // DEBUG_PRINTLN("line " << i << ": " << line_w.endPt << line_w.startPt);
     }
 
     std::vector<LineSegment> doors;
@@ -337,7 +321,6 @@ void CloudProcessor::run(const pcl::PointCloud<Point>::ConstPtr& cloud) {
             }
         }
     }
-    // DEBUG_PRINTLN("-------------------------------------------------------");
 
     // Free `lines` memory
     lines->lines.clear();
