@@ -24,6 +24,9 @@ class ROSConnector {
         string scan_topic_;
         string path_topic_;
         float min_door_width_;
+        float cluster_min_size_, cluster_max_size_, cluster_tolerance_;
+        float line_min_points_, line_exact_min_points_;
+
      public:
         ROSConnector();
 

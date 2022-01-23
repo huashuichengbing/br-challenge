@@ -5,17 +5,23 @@
 #include <pcl/sample_consensus/sac_model_line.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/kdtree/kdtree.h>
 
 #include "door_detector/cloud_processor.h"
 
-#define LINE_MIN_PTS 30
-#define LINE_MIN_FIT_PTS (LINE_MIN_PTS/2)
-
 namespace door_detector {
 
-CloudProcessor::CloudProcessor(float min_door_width) : min_door_width_(min_door_width),
+CloudProcessor::CloudProcessor(float min_door_width, float cluster_min_size, float cluster_max_size, float cluster_tolerance,
+                               float line_min_points, float line_exact_min_points) : 
+    min_door_width_(min_door_width),
+    cluster_min_size_(cluster_min_size),
+    cluster_max_size_(cluster_max_size),
+    cluster_tolerance_(cluster_tolerance),
+    line_min_points_(line_min_points),
+    line_exact_min_points_(line_exact_min_points),
 #ifdef VISUALIZE
-viewer_(new pcl::visualization::PCLVisualizer("PCL Viewer"))
+    viewer_(new pcl::visualization::PCLVisualizer("PCL Viewer"))
 #endif
 {
     #ifdef VISUALIZE
@@ -143,7 +149,8 @@ inline float angleBetweenLinesXY(const LineSegment& line1, const LineSegment& li
     return angle;
 }
 
-bool CloudProcessor::detectCornerDoor(const LineSegment& line1, const LineSegment& line2, LineSegment& door) {
+bool CloudProcessor::detectCornerDoor(const LineSegment& line1, const LineSegment& line2, LineSegment& door) 
+{
     // If lines are not approximately perpendicular, it is not considered a corner door
     if (fabs(fabs(angleBetweenLinesXY(line1, line2)) - M_PI / 2) > M_PI/12)
         return false;
@@ -181,27 +188,22 @@ bool CloudProcessor::detectCornerDoor(const LineSegment& line1, const LineSegmen
 }
 
 FittedLineInfo *
-CloudProcessor::RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputCloud, long int maxIterations,
+CloudProcessor::RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr input_cloud, long int maxIterations,
                         float distanceThreshold,
                         float cutoffPercentage, bool dense) {
-    FittedLineInfo *retLines = new FittedLineInfo;
-    retLines->numberOfLines = 0;
-
-    if (retLines == NULL) {
-        return NULL;
-    }
+    FittedLineInfo *ret_lines = new FittedLineInfo;
 
     pcl::SampleConsensusModelLine<Point>::Ptr obj(
-            new pcl::SampleConsensusModelLine<Point>(inputCloud));
+            new pcl::SampleConsensusModelLine<Point>(input_cloud));
 
     pcl::PointCloud<Point>::Ptr localInputCloud;
-    localInputCloud = inputCloud->makeShared();
+    localInputCloud = input_cloud->makeShared();
 
     pcl::PointCloud<Point>::Ptr cloud_p(new pcl::PointCloud<Point>), cloud_f(new pcl::PointCloud<Point>);
 
     // Create the segmentation object for the planar model and set all the parameters
     pcl::SACSegmentation<Point> seg;
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices), exact_inliers(new pcl::PointIndices);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices), actual_inliers(new pcl::PointIndices);
 
     seg.setOptimizeCoefficients(true);
     seg.setModelType(pcl::SACMODEL_LINE);
@@ -233,25 +235,24 @@ CloudProcessor::RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputClo
         float *ptr = &(coefficients->values[0]);
         Eigen::Map<Eigen::VectorXf> coeff(ptr, coefficients->values.size());
 
-        obj->selectWithinDistance(coeff, distanceThreshold, exact_inliers->indices);
-        extract.setInputCloud(inputCloud);
-        extract.setIndices(exact_inliers);
+        obj->selectWithinDistance(coeff, distanceThreshold, actual_inliers->indices);
+        extract.setInputCloud(input_cloud);
+        extract.setIndices(actual_inliers);
         extract.setNegative(false);
         extract.filter(*cloud_p);
 
-
-        if (exact_inliers->indices.size() < LINE_MIN_PTS || inliers->indices.size() < LINE_MIN_FIT_PTS)
+        if (actual_inliers->indices.size() < line_min_points_|| inliers->indices.size() < line_exact_min_points_)
             skip = true;
 
         if (!skip) {
             if (dense) {
-                retLines->lines.push_back(cloud_p->makeShared());
+                ret_lines->lines.push_back(cloud_p->makeShared());
                 LineSegment pts = getLineXYMinMaxPoints(cloud_p, coefficients);
-                retLines->lines_min_max_points.push_back(pts);
+                ret_lines->lines_min_max_points.push_back(pts);
             }
 
-            retLines->lines_coefficients.push_back(coefficients);
-            retLines->numberOfLines++;
+            ret_lines->lines_coefficients.push_back(coefficients);
+            ret_lines->num_lines++;
         }
 
         //This one gets the points cut out of it.
@@ -262,9 +263,9 @@ CloudProcessor::RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputClo
 
         if (!skip) {
             if (!dense) {
-                retLines->lines.push_back(cloud_p->makeShared());
+                ret_lines->lines.push_back(cloud_p->makeShared());
                 LineSegment pts = getLineXYMinMaxPoints(cloud_p, coefficients);
-                retLines->lines_min_max_points.push_back(pts);
+                ret_lines->lines_min_max_points.push_back(pts);
             }
         }
 
@@ -274,7 +275,47 @@ CloudProcessor::RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputClo
         skip = false;
     }
 
-    return retLines;
+    return ret_lines;
+}
+
+
+ClusterInfo *
+CloudProcessor::EuclideanClustering(pcl::PointCloud<Point>::ConstPtr input_cloud, long int min_cluster_size,
+                    long int max_cluster_size,
+                    float cluster_tolerance) 
+{
+    ClusterInfo *ret_clusters = new ClusterInfo;
+
+    // Creating the KdTree object for the search method of the extraction
+    pcl::search::KdTree<Point>::Ptr tree(new pcl::search::KdTree<Point>);
+    tree->setInputCloud(input_cloud);
+
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<Point> ec;
+    ec.setClusterTolerance(cluster_tolerance);
+    ec.setMinClusterSize(static_cast<int>(min_cluster_size));
+    ec.setMaxClusterSize(static_cast<int>(max_cluster_size));
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(input_cloud);
+    ec.extract(cluster_indices);
+
+    ret_clusters->num_clusters = static_cast<int>(cluster_indices.size());
+
+    for (const auto &it: cluster_indices) {
+        pcl::PointCloud<Point>::Ptr cloud_cluster(new pcl::PointCloud<Point>);
+
+        for (const auto &pit: it.indices) {
+            cloud_cluster->points.push_back(input_cloud->points[pit]); //*
+        }
+
+        cloud_cluster->width = static_cast<uint32_t>(cloud_cluster->points.size());
+        cloud_cluster->height = 1;
+        cloud_cluster->is_dense = true;
+
+        ret_clusters->clusters.push_back(cloud_cluster);
+    }
+
+    return ret_clusters;
 }
 
 void CloudProcessor::detect(const pcl::PointCloud<Point>::ConstPtr& cloud) {
@@ -284,31 +325,41 @@ void CloudProcessor::detect(const pcl::PointCloud<Point>::ConstPtr& cloud) {
     viewer_->removeAllPointClouds();
     viewer_->removeAllShapes();
 
-    pcl::visualization::PointCloudColorHandlerCustom<Point> color(cloud, 255, 0, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<Point> color(cloud, 255, 255, 255);
     viewer_->addPointCloud<Point>(cloud, color, "cloud");
     #endif
 
+    // auto clusters = EuclideanClustering(cloud, cluster_min_size_, cluster_max_size_, cluster_tolerance_);
+
+    // #ifdef VISUALIZE
+    // for (int i = 0; i < clusters->num_clusters; i++) {
+    //     int r = rand() % 255, g = rand() % 255, b = rand() % 255;
+    //     pcl::visualization::PointCloudColorHandlerCustom<Point> color(clusters->clusters[i], r, g, b);
+
+    //     viewer_->addPointCloud<Point>(clusters->clusters[i], color, "C" + std::to_string(i));
+    // }
+    // viewer_->addText("# clusters: "+std::to_string(clusters->num_clusters), 10, 100, "Tc"+std::to_string(text_id_++));
+    // #endif
+
     auto lines = RANSAC_PointCloudLines(cloud, 1000, 0.01, 0.05, false);
-    for (int i = 0; i < lines->numberOfLines; i++) {
+
+    #ifdef  VISUALIZE
+    for (int i = 0; i < lines->num_lines; i++) {
         // auto line_w = lines->lines_coefficients[i];
         auto line_w = lines->lines_min_max_points[i];
 
-        #ifdef  VISUALIZE
         int r = rand() % 255, g = rand() % 255, b = rand() % 255;
         viewer_->addLine(line_w.endPt, line_w.startPt, r/ 255.0, g/ 255.0, b/ 255.0, "L"+std::to_string(i));
         viewer_->addSphere(line_w.startPt, 0.02, r/ 255.0, g/ 255.0, b/ 255.0, "Ss"+std::to_string(i));
         viewer_->addSphere(line_w.endPt, 0.02, r/ 255.0, g/ 255.0, b/ 255.0, "Se"+std::to_string(i));
-        viewer_->addText("# lines: "+std::to_string(lines->numberOfLines), 10, 50, "T"+std::to_string(text_id_++));
-        
-        // pcl::visualization::PointCloudColorHandlerCustom<Point> color(lines->lines[i], r, g, b);
-        // viewer_->addPointCloud<Point>(lines->lines[i], color, "C"+std::to_string(i));
-        #endif
     }
+    viewer_->addText("# lines: "+std::to_string(lines->num_lines), 10, 50, "Tl"+std::to_string(text_id_++));
+    #endif
 
     std::vector<LineSegment> doors;
     LineSegment tmp_door;
-    for (int i = 0; i < lines->numberOfLines - 1; i++) {
-        for (int j = i+1; j < lines->numberOfLines; j++) {
+    for (int i = 0; i < lines->num_lines - 1; i++) {
+        for (int j = i+1; j < lines->num_lines; j++) {
             auto line_i = lines->lines_min_max_points[i];
             auto line_j = lines->lines_min_max_points[j];
 
@@ -328,6 +379,11 @@ void CloudProcessor::detect(const pcl::PointCloud<Point>::ConstPtr& cloud) {
     lines->lines_coefficients.clear();
     lines->lines_coefficients.shrink_to_fit();
     free(lines);
+
+    // Free `clusters` memory
+    // clusters->clusters.clear();
+    // clusters->clusters.shrink_to_fit();
+    // free(clusters);
 }
 
 void CloudProcessor::spinOnce() {

@@ -1,4 +1,16 @@
-ip_scan_topic: "/scan"
+ip_scan_topic: "scan/"
 op_path_topic: "path/"
+
 # Ignore doors smaller than this width
 min_door_width: 0.5
+
+## RANSAC line detection params
+# Min number of point for a line detection
+line_min_points: 20
+# Min number of actual model fits for a line detection
+line_exact_min_points: 15
+
+## Eucledean clustering params
+cluster_min_size: 25
+cluster_max_size: 200
+cluster_tolerance: 0.3

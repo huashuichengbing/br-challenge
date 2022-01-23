@@ -18,7 +18,8 @@ ROSConnector::ROSConnector() :
 {
     parseParams();
 
-    cloud_processor_ = new CloudProcessor(min_door_width_);
+    cloud_processor_ = new CloudProcessor(min_door_width_, cluster_min_size_, cluster_max_size_, cluster_tolerance_, 
+                                          line_min_points_, line_exact_min_points_);
     scan_sub_ = nh_.subscribe<sensor_msgs::LaserScan> (scan_topic_, 1, &ROSConnector::scanCallback, this);
     point_cloud_publisher_ = nh_.advertise<sensor_msgs::PointCloud2> (path_topic_, 100, false);
 }
@@ -49,7 +50,7 @@ T ROSConnector::find_param(const string &node_full_name, const string &param_nam
     T param_value;
     if (!nh_.getParam(node_full_name + "/" + param_name, param_value))
         throw std::runtime_error("parameter `" + param_name + "` is not found");
-    DEBUG_PRINTLN("--" << param_name << ": " << param_value);
+    DEBUG_PRINTLN("\t" << param_name << ": " << param_value);
     return param_value;
 }
 
@@ -58,11 +59,16 @@ void ROSConnector::parseParams() {
     const string &ns = ros::this_node::getNamespace();
     const string full_name = (ns == "/") ? node_name : (ns + node_name);
 
-    DEBUG_PRINTLN("Loading parameters");
+    DEBUG_PRINTLN("Loading parameters...");
 
     scan_topic_ = find_param<string>(full_name, "ip_scan_topic");
     path_topic_ = find_param<string>(full_name, "op_path_topic");
     min_door_width_ = find_param<float>(full_name, "min_door_width");
+    cluster_min_size_ = find_param<float>(full_name, "cluster_min_size");
+    cluster_max_size_ = find_param<float>(full_name, "cluster_max_size");
+    cluster_tolerance_ = find_param<float>(full_name, "cluster_tolerance");
+    line_min_points_ = find_param<float>(full_name, "line_min_points");
+    line_exact_min_points_ = find_param<float>(full_name, "line_exact_min_points");
 }
 
 ROSConnector::~ROSConnector() {

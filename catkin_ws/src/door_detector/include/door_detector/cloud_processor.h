@@ -32,33 +32,49 @@ typedef struct LineSegment
 
 typedef struct FittedLineInfo
 {
-    FittedLineInfo() : numberOfLines(0) {};
+    FittedLineInfo() : num_lines(0) {};
     std::vector<pcl::PointCloud<Point>::Ptr> lines;
     std::vector<LineSegment> lines_min_max_points;
     std::vector<pcl::ModelCoefficients::Ptr> lines_coefficients;
-    int numberOfLines;
+    int num_lines;
 } FittedLineInfo;
 
+typedef struct ClusterInfo
+{
+    ClusterInfo() : num_clusters(0) {};
+    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
+    int num_clusters;
+} ClusterInfo;
+
 class CloudProcessor {
-#ifdef VISUALIZE
-    // int text_id_;
+
+private:
+    #ifdef VISUALIZE
     pcl::visualization::PCLVisualizer::Ptr viewer_;
-#endif
+    #endif
 
     float min_door_width_;
+    float cluster_min_size_, cluster_max_size_, cluster_tolerance_;
+    float line_min_points_, line_exact_min_points_;
 
     FittedLineInfo *  RANSAC_PointCloudLines(pcl::PointCloud<Point>::ConstPtr inputCloud, 
                         long int maxIterations,
                         float distanceThreshold,
                         float cutoffPercentage, bool dense);
 
+    ClusterInfo *
+    EuclideanClustering(pcl::PointCloud<Point>::ConstPtr inputCloud, long int minClusterSize,
+                        long int maxCluseterSize,
+                        float clusterTolerance);
+                        
     LineSegment getLineXYMinMaxPoints(pcl::PointCloud<Point>::ConstPtr line, 
                         pcl::ModelCoefficients::ConstPtr coefficients);
 
     bool detectCornerDoor(const LineSegment& line1, const LineSegment& line2, LineSegment& door);
 
 public:
-    CloudProcessor(float min_door_width);
+    CloudProcessor(float min_door_width, float cluster_min_size, float cluster_max_size, float cluster_tolerance,
+                   float line_min_points, float line_exact_min_points);
 
     void detect(const pcl::PointCloud<Point>::ConstPtr& cloud);
 
