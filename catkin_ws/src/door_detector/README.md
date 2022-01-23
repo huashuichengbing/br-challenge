@@ -39,3 +39,10 @@ In the example below, the detected door and the possible path is shown similar t
 previous example.
 
 <img src="imgs/corner_door.png" alt="corner door" width="600"/>
+
+# TODO
+
+## Bugs
+
+1. Publishing the paths throws a `ros::serialization::StreamOverrunException` error (possibly due to the publish rate)
+2. Multiple overlappint line detections (Need to be fixed without affecting the detected line's accuracy)
